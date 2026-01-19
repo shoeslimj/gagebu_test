@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Elite Finance Dashboard v8.5 Final</title>
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+        :root { 
+            --primary: #2563eb; --income: #10b981; --expense: #ef4444; 
+            --bg: #f8fafc; --card: #ffffff; --text: #1e293b; --border: #e2e8f0;
+            --font: 'Pretendard', -apple-system, sans-serif;
+        }
+        
+        body { margin: 0; padding: 25px; font-family: var(--font); background-color: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+
+        /* 커스텀 툴팁 */
+        #custom-tooltip {
+            position: fixed; display: none; pointer-events: none; z-index: 9999;
+            background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px);
+            border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1); font-size: 0.85rem; animation: tooltipFade 0.2s ease-out;
+        }
+        @keyframes tooltipFade { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+
+        .dashboard-wrapper { max-width: 1600px; margin: 0 auto; display: flex; flex-direction: column; gap: 25px; }
+        .top-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 5px; }
+        .summary-item { background: #1e293b; color: #fff; padding: 25px; border-radius: 20px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+        .summary-item .val { font-size: 1.6rem; font-weight: 800; margin-top: 8px; }
+
+        .main-container { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 25px; align-items: start; }
+        .glass-card { background: var(--card); border-radius: 28px; padding: 25px; border: 1px solid var(--border); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.04); }
+
+        #calendar-container { min-height: 750px; }
+        #calendar { height: 750px !important; border: none; }
+        .fc-daygrid-day-frame { height: 105px !important; overflow-y: auto !important; }
+
+        input, select, button { padding: 12px 16px; border: 1px solid var(--border); border-radius: 12px; background: #f8fafc; font-family: var(--font); font-size: 0.95rem; box-sizing: border-box; }
+        .btn-primary { background: var(--primary); color: white; border: none; font-weight: 700; cursor: pointer; }
+        .event-tag { border-radius: 6px; padding: 4px 8px; color: white; font-weight: 700; margin-bottom: 2px; font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; }
+
+        /* 모달 및 리스트 편집 디자인 */
+        #modal, #overlay { display: none; position: fixed; }
+        #overlay { top:0; left:0; width:100%; height:100%; background: rgba(15, 23, 42, 0.2); z-index: 999; backdrop-filter: blur(6px); }
+        #modal { top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 35px; border-radius: 32px; z-index: 1000; width: 480px; max-height: 90vh; overflow-y: auto; }
+        
+        .entry-item { 
+            display: flex; flex-direction: column; gap: 8px; padding: 12px; 
+            border-radius: 16px; border: 1px solid transparent; transition: 0.2s;
+        }
+        .entry-item:hover { background: #f1f5f9; border-color: var(--border); }
+        .entry-row { display: flex; justify-content: space-between; align-items: center; }
+        .entry-actions { display: none; gap: 8px; }
+        .entry-item:hover .entry-actions { display: flex; }
+        
+        .action-btn { font-size: 0.75rem; padding: 4px 8px; border-radius: 6px; cursor: pointer; border: 1px solid var(--border); background: white; }
+        .action-btn.del { color: var(--expense); }
+        .edit-form { display: none; flex-direction: column; gap: 8px; background: #fff; padding: 10px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+
+<div id="custom-tooltip"></div>
+
+<div class="dashboard-wrapper">
+    <div class="top-summary">
+        <div class="summary-item" style="background: var(--primary);">
+            <h4>기초 자산 설정</h4>
+            <input type="number" id="base-asset-input" onfocus="if(this.value == '0') this.value = '';" onblur="if(this.value == '') this.value = '0';" onchange="setBaseAsset()" onkeypress="if(event.keyCode==13) this.blur();" value="0" style="border:none; border-bottom:2px solid rgba(255,255,255,0.3); background:none; color:white; font-size:1.6rem; font-weight:800; outline:none; width:100%;">
+        </div>
+        <div class="summary-item"><h4>누적 총 수입</h4><div id="y-income" class="val" style="color:var(--income)">0원</div></div>
+        <div class="summary-item"><h4>누적 총 지출</h4><div id="y-expense" class="val" style="color:var(--expense)">0원</div></div>
+        <div class="summary-item" style="background: #fff; color: #1e293b; border: 1px solid var(--border);"><h4>현재 가용 자산</h4><div id="y-total" class="val" style="color: var(--primary);">0원</div></div>
+    </div>
+
+    <div class="main-container">
+        <div class="left-section">
+            <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 15px 30px;">
+                <h2 id="month-label" style="margin:0; font-size: 1.5rem; font-weight: 800;">2026.01</h2>
+                <button onclick="exportExcel()" style="cursor:pointer; width:auto;">Excel Export</button>
+            </div>
+            <div class="glass-card" id="calendar-container"><div id="calendar"></div></div>
+        </div>
+        <div class="right-section" style="display:flex; flex-direction:column; gap:25px;">
+            <div class="glass-card" style="height:350px;"><h3>📈 자산 흐름</h3><div style="height:280px;"><canvas id="trendChart"></canvas></div></div>
+            <div class="glass-card" style="height:350px;"><h3>🍕 소비 분석</h3><div style="height:280px;"><canvas id="donutChart"></canvas></div></div>
+        </div>
+    </div>
+</div>
+
+<div id="overlay" onclick="closeModal()"></div>
+<div id="modal">
+    <div style="border-bottom: 2px solid #f1f5f9; padding-bottom: 15px; margin-bottom: 20px;">
+        <h2 id="modal-date" style="margin:0; color:var(--primary); font-weight: 800;">날짜</h2>
+        <div id="day-entries" style="margin-top:15px; display:flex; flex-direction:column; gap:10px;"></div>
+    </div>
+    
+    <div id="new-entry-area">
+        <h4 style="margin:0 0 10px 0;">내역 추가</h4>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+            <select id="type" onchange="updateCategories()"><option value="expense">지출</option><option value="income">수입</option></select>
+            <select id="category"></select>
+        </div>
+        <input type="number" id="amount" placeholder="금액 (Enter)" onkeypress="if(event.keyCode==13) saveEntry();" style="width:100%;">
+        <input type="text" id="memo" placeholder="상세 사유 기록 (Enter)" onkeypress="if(event.keyCode==13) saveEntry();" style="width:100%;">
+        <button onclick="saveEntry()" class="btn-primary" style="width:100%; margin-top:10px;">저장하기</button>
+    </div>
+</div>
+
+<script>
+    const categories = {
+        expense: { '식비': '#fb7185', '교통': '#60a5fa', '금융/카드': '#a78bfa', '쇼핑': '#fb923c', '주거/통신': '#2dd4bf', '의료/건강': '#f472b6', '기타': '#94a3b8' },
+        income: { '월급': '#34d399', '용돈': '#fbbf24', '보너스': '#22d3ee', '기타': '#94a3b8' }
+    };
+
+    let entries = JSON.parse(localStorage.getItem('accountData_v8_5')) || [];
+    let baseAsset = parseInt(localStorage.getItem('baseAsset_v8_5')) || 0;
+    let calendar, donutChart, trendChart, selectedDate;
+    const tooltip = document.getElementById('custom-tooltip');
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('base-asset-input').value = baseAsset;
+        initCalendar();
+        updateCategories();
+        updateUI();
+    });
+
+    function initCalendar() {
+        calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
+            initialView: 'dayGridMonth', locale: 'ko', height: '100%', fixedWeekCount: false,
+            datesSet: () => updateUI(),
+            dateClick: (info) => { selectedDate = info.dateStr; openModal(info.dateStr); },
+            eventContent: (arg) => {
+                let d = document.createElement('div');
+                d.className = 'event-tag'; d.style.backgroundColor = arg.event.backgroundColor;
+                d.innerText = arg.event.title;
+                const data = arg.event.extendedProps;
+                d.onmouseenter = (e) => showTooltip(e, `<b style="color:${data.type==='income'?'var(--income)':'var(--expense)'}">${data.type==='income'?'▲ 수입':'▼ 지출'}</b><br><b>${Number(data.amount).toLocaleString()}원</b><br>${data.category} | ${data.memo || '-'}`);
+                d.onmousemove = (e) => { tooltip.style.left = e.clientX + 15 + 'px'; tooltip.style.top = e.clientY + 15 + 'px'; };
+                d.onmouseleave = () => tooltip.style.display = 'none';
+                return { domNodes: [d] };
+            },
+            events: entries.map((e, idx) => ({
+                id: idx, title: `${e.type==='income'?'▲':'▼'} ${e.category} ${e.amount.toLocaleString()}`,
+                start: e.date, backgroundColor: e.type==='income' ? '#10b981' : '#ef4444',
+                extendedProps: e
+            }))
+        });
+        calendar.render();
+    }
+
+    function saveEntry() {
+        const amt=parseInt(document.getElementById('amount').value);
+        if(!amt) return;
+        const entry = { date: selectedDate, type: document.getElementById('type').value, category: document.getElementById('category').value, amount: amt, memo: document.getElementById('memo').value };
+        entries.push(entry);
+        syncData();
+        openModal(selectedDate);
+        document.getElementById('amount').value=''; document.getElementById('memo').value='';
+    }
+
+    function deleteEntry(index) {
+        if(!confirm("정말 삭제하시겠습니까?")) return;
+        entries.splice(index, 1);
+        syncData();
+        openModal(selectedDate);
+    }
+
+    function showEditForm(idx) {
+        document.getElementById(`view-${idx}`).style.display = 'none';
+        document.getElementById(`edit-${idx}`).style.display = 'flex';
+    }
+
+    function updateEntry(idx) {
+        const type = document.getElementById(`edit-type-${idx}`).value;
+        const cat = document.getElementById(`edit-cat-${idx}`).value;
+        const amt = parseInt(document.getElementById(`edit-amt-${idx}`).value);
+        const memo = document.getElementById(`edit-memo-${idx}`).value;
+        if(!amt) return;
+        entries[idx] = { ...entries[idx], type, category: cat, amount: amt, memo };
+        syncData();
+        openModal(selectedDate);
+    }
+
+    function syncData() {
+        localStorage.setItem('accountData_v8_5', JSON.stringify(entries));
+        calendar.removeAllEvents();
+        calendar.addEventSource(entries.map((e, idx) => ({
+            id: idx, title: `${e.type==='income'?'▲':'▼'} ${e.category} ${e.amount.toLocaleString()}`,
+            start: e.date, backgroundColor: e.type==='income' ? '#10b981' : '#ef4444', extendedProps: e
+        })));
+        updateUI();
+    }
+
+    function openModal(date) {
+        document.getElementById('modal-date').innerText = date;
+        const listDiv = document.getElementById('day-entries'); listDiv.innerHTML = '';
+        entries.forEach((e, idx) => {
+            if(e.date === date) {
+                const item = document.createElement('div');
+                item.className = 'entry-item';
+                item.innerHTML = `
+                    <div id="view-${idx}">
+                        <div class="entry-row">
+                            <b><span style="color:${e.type==='income'?'#10b981':'#ef4444'}">${e.category}</span> ${e.amount.toLocaleString()}원</b>
+                            <div class="entry-actions">
+                                <button class="action-btn" onclick="showEditForm(${idx})">수정</button>
+                                <button class="action-btn del" onclick="deleteEntry(${idx})">삭제</button>
+                            </div>
+                        </div>
+                        <div style="font-size:0.85rem; color:#64748b;">${e.memo || '-'}</div>
+                    </div>
+                    <div id="edit-${idx}" class="edit-form">
+                        <select id="edit-type-${idx}" onchange="updateEditCats(${idx})"><option value="expense" ${e.type==='expense'?'selected':''}>지출</option><option value="income" ${e.type==='income'?'selected':''}>수입</option></select>
+                        <select id="edit-cat-${idx}"></select>
+                        <input type="number" id="edit-amt-${idx}" value="${e.amount}">
+                        <input type="text" id="edit-memo-${idx}" value="${e.memo}">
+                        <div style="display:flex; gap:5px;"><button class="btn-primary" onclick="updateEntry(${idx})" style="flex:1;">완료</button><button onclick="openModal('${date}')" style="flex:1;">취소</button></div>
+                    </div>
+                `;
+                listDiv.appendChild(item);
+                updateEditCats(idx, e.category);
+            }
+        });
+        document.getElementById('modal').style.display = 'block'; document.getElementById('overlay').style.display = 'block';
+    }
+
+    function updateEditCats(idx, selectedCat) {
+        const type = document.getElementById(`edit-type-${idx}`).value;
+        const catSelect = document.getElementById(`edit-cat-${idx}`);
+        catSelect.innerHTML = '';
+        Object.keys(categories[type]).forEach(cat => {
+            const opt = document.createElement('option'); opt.value = cat; opt.innerText = cat;
+            if(cat === selectedCat) opt.selected = true;
+            catSelect.appendChild(opt);
+        });
+    }
+
+    function updateUI() {
+        const date = calendar.getDate(), m = date.getMonth(), y = date.getFullYear();
+        document.getElementById('month-label').innerText = `${y}.${String(m+1).padStart(2,'0')}`;
+        let mInc=0, mExp=0, yInc=0, yExp=0, mStats={};
+        entries.forEach(e => {
+            const ed = new Date(e.date);
+            if(e.type==='income') yInc += e.amount; else yExp += e.amount;
+            if(ed.getMonth()===m && ed.getFullYear()===y) {
+                if(e.type==='income') mInc += e.amount;
+                else { mExp += e.amount; mStats[e.category] = (mStats[e.category]||0) + e.amount; }
+            }
+        });
+        document.getElementById('y-income').innerText = yInc.toLocaleString()+'원';
+        document.getElementById('y-expense').innerText = yExp.toLocaleString()+'원';
+        document.getElementById('y-total').innerText = (baseAsset + yInc - yExp).toLocaleString()+'원';
+        updateCharts(mStats, m, y);
+    }
+
+    function updateCharts(stats, month, year) {
+        const highRes = { devicePixelRatio: 2.5, responsive: true, maintainAspectRatio: false };
+        const ctxD = document.getElementById('donutChart').getContext('2d');
+        if (donutChart) {
+            donutChart.data.labels = Object.keys(stats);
+            donutChart.data.datasets[0].data = Object.values(stats);
+            donutChart.data.datasets[0].backgroundColor = Object.keys(stats).map(k => categories.expense[k]);
+            donutChart.update();
+        } else {
+            donutChart = new Chart(ctxD, { type: 'doughnut', data: { labels: Object.keys(stats), datasets: [{ data: Object.values(stats), backgroundColor: Object.keys(stats).map(k => categories.expense[k]), borderWidth: 0 }] }, options: { ...highRes, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, font: { weight: 'bold' } } } }, cutout: '85%' } });
+        }
+        const ctxT = document.getElementById('trendChart').getContext('2d');
+        const lastDay = new Date(year, month + 1, 0).getDate();
+        let runningTotal = baseAsset;
+        entries.filter(e => new Date(e.date) < new Date(year, month, 1)).forEach(e => runningTotal += (e.type==='income'?e.amount:-e.amount));
+        let daily = [];
+        for(let d=1; d<=lastDay; d++) {
+            entries.filter(e => { const ed = new Date(e.date); return ed.getDate()===d && ed.getMonth()===month && ed.getFullYear()===year; }).forEach(e => runningTotal += (e.type==='income'?e.amount:-e.amount));
+            daily.push(runningTotal);
+        }
+        if (trendChart) { trendChart.data.labels = Array.from({length: lastDay}, (_, i) => i + 1); trendChart.data.datasets[0].data = daily; trendChart.update(); }
+        else { trendChart = new Chart(ctxT, { type: 'line', data: { labels: Array.from({length: lastDay}, (_, i) => i + 1), datasets: [{ data: daily, borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.05)', fill: true, tension: 0.4, pointRadius: 2, borderWidth: 3 }] }, options: { ...highRes, plugins: { legend: { display: false } }, scales: { y: { position: 'right', ticks: { callback: v => v.toLocaleString() } } } } }); }
+    }
+
+    function showTooltip(e, content) { tooltip.innerHTML = content; tooltip.style.display = 'block'; }
+    function closeModal() { document.getElementById('modal').style.display = 'none'; document.getElementById('overlay').style.display = 'none'; tooltip.style.display = 'none'; }
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+    function setBaseAsset() { baseAsset = parseInt(document.getElementById('base-asset-input').value) || 0; localStorage.setItem('baseAsset_v8_5', baseAsset); updateUI(); }
+    function updateCategories() {
+        const type = document.getElementById('type').value, catSelect = document.getElementById('category'); catSelect.innerHTML = '';
+        Object.keys(categories[type]).forEach(cat => { const opt = document.createElement('option'); opt.value = cat; opt.innerText = cat; catSelect.appendChild(opt); });
+    }
+    function exportExcel() {
+        const d = calendar.getDate();
+        const f = entries.filter(e => { const ed = new Date(e.date); return ed.getMonth() === d.getMonth() && ed.getFullYear() === d.getFullYear(); })
+            .map(e => ({ "날짜": e.date, "구분": e.type==='income'?'수입':'지출', "카테고리": e.category, "금액": e.amount, "메모": e.memo }));
+        const ws = XLSX.utils.json_to_sheet(f); const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Financial_Report"); XLSX.writeFile(wb, `Report_${d.getFullYear()}_${d.getMonth()+1}.xlsx`);
+    }
+</script>
+</body>
+</html>
