@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>Elite Finance Dashboard v8.5 Final</title>
+    <title>Elite Finance Dashboard v8.6 (Mobile Ready)</title>
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -42,23 +42,30 @@
         .btn-primary { background: var(--primary); color: white; border: none; font-weight: 700; cursor: pointer; }
         .event-tag { border-radius: 6px; padding: 4px 8px; color: white; font-weight: 700; margin-bottom: 2px; font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; }
 
-        /* 모달 및 리스트 편집 디자인 */
         #modal, #overlay { display: none; position: fixed; }
         #overlay { top:0; left:0; width:100%; height:100%; background: rgba(15, 23, 42, 0.2); z-index: 999; backdrop-filter: blur(6px); }
         #modal { top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 35px; border-radius: 32px; z-index: 1000; width: 480px; max-height: 90vh; overflow-y: auto; }
         
-        .entry-item { 
-            display: flex; flex-direction: column; gap: 8px; padding: 12px; 
-            border-radius: 16px; border: 1px solid transparent; transition: 0.2s;
-        }
+        .entry-item { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 16px; border: 1px solid transparent; transition: 0.2s; }
         .entry-item:hover { background: #f1f5f9; border-color: var(--border); }
         .entry-row { display: flex; justify-content: space-between; align-items: center; }
         .entry-actions { display: none; gap: 8px; }
         .entry-item:hover .entry-actions { display: flex; }
-        
         .action-btn { font-size: 0.75rem; padding: 4px 8px; border-radius: 6px; cursor: pointer; border: 1px solid var(--border); background: white; }
         .action-btn.del { color: var(--expense); }
         .edit-form { display: none; flex-direction: column; gap: 8px; background: #fff; padding: 10px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+
+        /* ✨ [추가] 모바일 대응 미디어 쿼리 */
+        @media (max-width: 768px) {
+            body { padding: 15px; }
+            .top-summary { grid-template-columns: repeat(2, 1fr); gap: 10px; } /* 2열로 변경 */
+            .main-container { grid-template-columns: 1fr; display: flex; flex-direction: column; } /* 세로 배치 */
+            #calendar-container, #calendar { height: 550px !important; min-height: 550px; } /* 달력 높이 축소 */
+            .summary-item { padding: 15px; }
+            .summary-item .val { font-size: 1.2rem; }
+            #modal { width: 92%; padding: 25px; } /* 모달 너비 확장 */
+            .summary-item h4 { font-size: 0.7rem; }
+        }
     </style>
 </head>
 <body>
@@ -80,7 +87,7 @@
         <div class="left-section">
             <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 15px 30px;">
                 <h2 id="month-label" style="margin:0; font-size: 1.5rem; font-weight: 800;">2026.01</h2>
-                <button onclick="exportExcel()" style="cursor:pointer; width:auto;">Excel Export</button>
+                <button onclick="exportExcel()" style="cursor:pointer; width:auto; padding: 8px 15px;">Export</button>
             </div>
             <div class="glass-card" id="calendar-container"><div id="calendar"></div></div>
         </div>
@@ -97,7 +104,6 @@
         <h2 id="modal-date" style="margin:0; color:var(--primary); font-weight: 800;">날짜</h2>
         <div id="day-entries" style="margin-top:15px; display:flex; flex-direction:column; gap:10px;"></div>
     </div>
-    
     <div id="new-entry-area">
         <h4 style="margin:0 0 10px 0;">내역 추가</h4>
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
@@ -111,6 +117,8 @@
 </div>
 
 <script>
+    // JS 로직은 v8.5와 동일합니다 (syncData, openModal 등 수정/삭제 기능 포함)
+    // ... 기존 script 내용 생략 없이 그대로 유지 ...
     const categories = {
         expense: { '식비': '#fb7185', '교통': '#60a5fa', '금융/카드': '#a78bfa', '쇼핑': '#fb923c', '주거/통신': '#2dd4bf', '의료/건강': '#f472b6', '기타': '#94a3b8' },
         income: { '월급': '#34d399', '용돈': '#fbbf24', '보너스': '#22d3ee', '기타': '#94a3b8' }
